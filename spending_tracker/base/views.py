@@ -7,3 +7,6 @@ class IndexView(TemplateView):
     '''
     '''
     template_name = 'base/index.html'
+
+def load_messages(request):
+    return render(request, 'base/partials/messages.html')

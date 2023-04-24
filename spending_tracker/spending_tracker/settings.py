@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     'ledger.apps.LedgerConfig',
     'base.apps.BaseConfig',
     'crispy_forms',
+    'crispy_bootstrap4',
+    'django_htmx',
     'django_tables2',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -47,6 +49,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "django_htmx.middleware.HtmxMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -132,3 +135,9 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# crispyforms
+CRISPY_TEMPLATE_PACK = 'bootstrap4'
+
+# django-tables2
+DJANGO_TABLES2_TEMPLATE = 'django_tables2/bootstrap4.html'
