@@ -7,7 +7,7 @@
     <div class="row">
         <h3>Transactions</h3>
         <div class="col-8">
-            <div id="transaction-table" hx-get="{% url 'ledger:transaction-table-load'%}?page={{ page }}" hx-trigger="loadTransactionTable from:body">
+            <div id="transaction-table" hx-get="{% url 'ledger:transaction-table-load'%}?sort={{ sort }}&page={{ page }}" hx-trigger="loadTransactionTable from:body">
                 {% include 'ledger/transaction/partials/table.html' %}
             </div>
         </div>

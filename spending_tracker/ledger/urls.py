@@ -11,7 +11,9 @@ urlpatterns = [
     path('transaction/create/', views.transaction_create, name= 'transaction-create'),
     path('transaction/delete/<int:pk>', views.transaction_delete, name= 'transaction-delete'),
     path('transaction/table-load/', views.transaction_table_load, name= 'transaction-table-load'),
-    path('type/', views.TypeIndexView.as_view(), name= 'type-index'),
+    # path('type/', views.TypeIndexView.as_view(), name= 'type-index'),
+    path('type/', views.type_index, name= 'type-index'),
     path('type/create/', views.type_create, name= 'type-create'),
     path('type/delete/<int:pk>', views.type_delete, name= 'type-delete'),
+    path('type/table-load/', views.type_table_load, name= 'type-table-load'),
 ]
