@@ -15,7 +15,8 @@ class Type(models.Model):
 
     def __str__(self) -> str:
         return self.name
-
+# TODO
+# Add user ownership, add created/edited date
 class Transaction(models.Model):
     ref_num= models.CharField(max_length=256, default= generate_random_id, unique= True)
     source= models.CharField(max_length=256)

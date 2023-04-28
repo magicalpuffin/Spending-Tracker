@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.http import HttpResponse
+from django.http import QueryDict
 from django.views.generic import View, TemplateView
 
 from django_tables2 import RequestConfig
@@ -56,17 +57,6 @@ class LoadTransactionTableView(View):
 
         return render(request, self.template_name, context)
 
-
-# def load_transaction_table(request):
-#     '''
-#     Used to reload the table, should be triggered
-#     '''
-#     # Automatically uses the query string to load the correct page of table
-#     table= TransactionTable(Transaction.objects.all())
-#     RequestConfig(request, paginate={"per_page": 10}).configure(table)
-    
-#     return render(request, 'ledger/transaction/partials/table.html', {'table': table})
-
 class TransactionCreateView(View):
     '''
     '''
@@ -87,9 +77,6 @@ class TransactionCreateView(View):
         if form.is_valid():
             new_transaction = form.save()
 
-            table= self.table_class(self.model_class.objects.all())
-            RequestConfig(request, paginate={"per_page": 10}).configure(table)
-
             messages.add_message(request, messages.SUCCESS, f'Created {new_transaction.name}')
 
             form= self.form_class()
@@ -104,30 +91,6 @@ class TransactionCreateView(View):
         # Successful returns don't close the modal, would need to jquery or htmx hid the modal
         return response
 
-# def transaction_create(request):
-#     if request.method == 'POST':
-#         transaction_form= TransactionForm(request.POST)
-
-#         if transaction_form.is_valid():
-#             new_transaction = transaction_form.save()
-
-#             table= TransactionTable(Transaction.objects.all())
-#             RequestConfig(request, paginate={"per_page": 10}).configure(table)
-
-#             messages.add_message(request, messages.SUCCESS, f'Created {new_transaction.name}')
-
-#             form= TransactionForm()
-#             response = render(request, 'ledger/transaction/partials/form.html', {'form': form})
-            
-#             # htmx triggers
-#             trigger_client_event(response, 'loadTransactionTable', {})
-#             trigger_client_event(response, 'loadMessages', {})
-#         else:
-#             # Returns form with errors
-#             response = render(request, 'ledger/transaction/partials/form.html', {'form': transaction_form})
-
-#     # Successful returns doesn't close modal, would need to jquery or htmx hid the modal
-#     return response
 
 class TransactionDeleteView(View):
     model_class= Transaction
@@ -145,23 +108,51 @@ class TransactionDeleteView(View):
 
         return response
 
-# def transaction_delete(request, pk):
-#     if request.method == 'DELETE':
-#         remove_transaction = Transaction.objects.get(pk = pk)
-#         remove_transaction.delete()
+# TODO
+# Clean up partials, document methods
+class TransactionUpdateView(View):
+    template_name= 'ledger/transaction/partials/update-modal.html'
+    form_class= TransactionForm
+    model_class= Transaction
 
-#         messages.add_message(request, messages.SUCCESS, f'Deleted {remove_transaction.name}')
+    def get(self, request, pk, *args, **kwargs):
+        context= {}
 
-#         # Adds triggers to response header
-#         response= HttpResponse('')
-#         trigger_client_event(response, 'loadTransactionTable', {})
-#         trigger_client_event(response, 'loadMessages', {})
+        model = self.model_class.objects.get(pk = pk)
+        form = self.form_class(instance= model)
+        
+        context['object'] = model
+        context['form'] = form
 
-#     return response
+        return render(request, self.template_name, context)
+    
+    def put(self, request, pk, *args, **kwargs):
+        context= {}
+
+        model = self.model_class.objects.get(pk = pk)
+        data = QueryDict(request.body).dict()
+        form = self.form_class(data, instance= model)
+
+        # I don't think model is needed for this
+        context['object'] = model
+        context['form'] = form
+
+        # Only updating the form, but modal gets dismissed anyways
+        response = render(request, 'ledger/transaction/partials/update-form.html', context)
+
+        if form.is_valid():
+            new_model = form.save()
+            messages.add_message(request, messages.SUCCESS, f'Updated {new_model.name}')
+            
+            # htmx triggers
+            trigger_client_event(response, 'loadTransactionTable', {})
+            trigger_client_event(response, 'loadMessages', {})
+        
+        # Issues with modal being dismissed even with errors
+        return response
 
 # TODO
-# Create some edit view, ideally can click edit from table, maybe link with modal
-
+# Refactor, split into smaller functions, flip if statement to remove indent
 class TransactionUploadView(View):
     template_name= 'ledger/transaction/partials/upload-form.html'
     form_class= UploadTransactionForm
@@ -178,6 +169,7 @@ class TransactionUploadView(View):
         if form.is_valid():
             upload_file = request.FILES["file"]
             
+            # If file is not a csv, give warning
             if not upload_file.name.endswith('.csv'):                
                 messages.add_message(request, messages.WARNING, f'File is not a csv')
 
@@ -186,36 +178,49 @@ class TransactionUploadView(View):
             
             upload_df = pd.read_csv(upload_file)
 
+            # If columns does not contain key model fields, give warning
             if not set(['ref_num', 'trans_date', 'name', 'amount']).issubset(upload_df.columns):
                 messages.add_message(request, messages.WARNING, f'Incorrect columns')
 
                 trigger_client_event(response, 'loadMessages', {})
                 return response
+            
+            # Prevents accidently setting using form
+            upload_df = upload_df[['ref_num', 'trans_date', 'name', 'amount']]
 
             # Only adds if data does not conflict with existing ref_nums
-            # TODO
-            # Display how many/what rows were added, how many were in conflict
             exisitng_ref_num = self.model_class.objects.values_list('ref_num', flat= True)
-            upload_df = upload_df[~upload_df['ref_num'].isin(exisitng_ref_num)]
+            duplicate_ref_num = upload_df['ref_num'].isin(exisitng_ref_num)
+            
+            upload_df = upload_df[~duplicate_ref_num]
 
-            # TODO
-            # Refresh trigger refresh of table and messages
+            if duplicate_ref_num.sum() > 0:
+                messages.add_message(request, messages.WARNING, f'Skipping {duplicate_ref_num.sum()} duplicate ref_nums')
+
+            if len(upload_df) < 1:
+                messages.add_message(request, messages.WARNING, f'No transactions with new ref_nums')
+
+                trigger_client_event(response, 'loadMessages', {})
+                return response
+            
+            failed_indexs = []
             for index, row in upload_df.iterrows():
                 # Uses the form to validate data before submission
                 # Adds source from from form to all rows
                 data_dict = row.to_dict()
                 data_dict['source'] = request.POST.get('source')
-                
-                # TODO
-                # Make these error messages more useful
-                try:
-                    form = TransactionForm(data_dict)
-                    if form.is_valid():
-                        form.save()
-                    else:
-                        messages.add_message(request, messages.WARNING, f'Could not save transaction')
-                except Exception as e:
-                    messages.add_message(request, messages.WARNING, f'Could not save transaction')
+
+                form = TransactionForm(data_dict)
+                if form.is_valid():
+                    form.save()
+                else:
+                    failed_indexs.append(index)
+
+            # Returns the indexes which failed
+            if failed_indexs:
+                messages.add_message(request, messages.WARNING, f'Unable to add {failed_indexs}')
+            
+            messages.add_message(request, messages.SUCCESS, f'Added {len(upload_df) - len(failed_indexs)} transactions')
             
             form= self.form_class()
             context['form'] = form
@@ -224,57 +229,4 @@ class TransactionUploadView(View):
             trigger_client_event(response, 'loadTransactionTable', {})
             trigger_client_event(response, 'loadMessages', {})
 
-        # TODO
-        # Change or decide how things get displayed, this form can probably just close modal and use messages
         return response
-
-
-# def transaction_upload(request):
-#     '''
-#     Processes the data upload, requires col names to match
-#     '''
-#     if request.method == 'POST':
-#         transaction_upload_form= UploadTransactionForm(request.POST, request.FILES)
-#         if transaction_upload_form.is_valid():
-#             upload_file = request.FILES["file"]
-            
-#             if not upload_file.name.endswith('.csv'):
-
-#                 transaction_upload_form= UploadTransactionForm()
-                
-#                 messages.add_message(request, messages.WARNING, f'File is not a csv')
-
-#                 response = render(request, 'ledger/transaction/partials/upload-form.html', {'uploadform': transaction_upload_form})
-#                 trigger_client_event(response, 'loadMessages', {})
-#                 return response
-            
-#             upload_df = pd.read_csv(upload_file)
-
-#             # Only adds if data does not conflict with existing ref_nums
-#             # TODO
-#             # Display how many/what rows were added, how many were in conflict
-#             exisitng_ref_num = Transaction.objects.values_list('ref_num', flat= True)
-#             upload_df = upload_df[~upload_df['ref_num'].isin(exisitng_ref_num)]
-
-#             # TODO
-#             # Refresh trigger refresh of table and messages
-#             for index, row in upload_df.iterrows():
-#                 # Uses the form to validate data before submission
-#                 # Adds source from from form to all rows
-#                 data_dict = row.to_dict()
-#                 data_dict['source'] = request.POST.get('source')
-                
-#                 # TODO
-#                 # Make these error messages more useful
-#                 try:
-#                     form = TransactionForm(data_dict)
-#                     if form.is_valid():
-#                         form.save()
-#                     else:
-#                         messages.add_message(request, messages.WARNING, f'Could not save transaction')
-#                 except Exception as e:
-#                     messages.add_message(request, messages.WARNING, f'Could not save transaction')
-
-#     # TODO
-#     # Change or decide how things get displayed, this form can probably just close modal and use messages
-#     return render(request, 'ledger/transaction/partials/upload-form.html', {'uploadform': transaction_upload_form})

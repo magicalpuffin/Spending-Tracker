@@ -12,6 +12,9 @@ from ledger.tables import TypeTable
 
 # Create your views here.
 
+# TODO
+# Could refactor to use mixins with transaction view
+
 class TypeIndexView(TemplateView):
     '''
     '''

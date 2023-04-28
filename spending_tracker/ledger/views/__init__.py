@@ -7,6 +7,7 @@ from .transaction_views import (
     LoadTransactionTableView,
     TransactionCreateView,
     TransactionDeleteView,
+    TransactionUpdateView,
     TransactionUploadView
 )
 

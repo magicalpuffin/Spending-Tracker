@@ -12,6 +12,7 @@ transaction_urlpatterns = [
     path('transaction/', views.TransactionIndexView.as_view(), name= 'transaction-index'),
     path('transaction/create/', views.TransactionCreateView.as_view(), name= 'transaction-create'),
     path('transaction/delete/<int:pk>', views.TransactionDeleteView.as_view(), name= 'transaction-delete'),
+    path('transaction/update/<int:pk>', views.TransactionUpdateView.as_view(), name= 'transaction-update'),
     path('transaction/load-table/', views.LoadTransactionTableView.as_view(), name= 'transaction-load-table'),
     path('transaction/upload/', views.TransactionUploadView.as_view(), name= 'transaction-upload'),
 ]
