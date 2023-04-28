@@ -4,10 +4,10 @@ from .report_views import(
 
 from .transaction_views import (
     TransactionIndexView,
-    load_transaction_table,
-    transaction_create,
-    transaction_delete,
-    transaction_upload
+    LoadTransactionTableView,
+    TransactionCreateView,
+    TransactionDeleteView,
+    TransactionUploadView
 )
 
 from .type_views import (

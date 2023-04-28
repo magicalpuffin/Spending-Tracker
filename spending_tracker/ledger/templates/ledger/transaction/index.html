@@ -6,7 +6,7 @@
     <a class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#create-transaction-modal">Create Transaction</a>
     <a class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#upload-transaction-modal">Upload Data</a>
     <div class="row">
-        <div id="transaction-table" hx-get="{% url 'ledger:transaction-table-load'%}?sort={{ sort }}&page={{ page }}" hx-trigger="loadTransactionTable from:body">
+        <div id="transaction-table" hx-get="{% url 'ledger:transaction-load-table'%}?sort={{ sort }}&page={{ page }}" hx-trigger="loadTransactionTable from:body">
             {% include 'ledger/transaction/partials/table.html' %}
         </div>
     </div>
