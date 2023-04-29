@@ -6,7 +6,7 @@
         </div>
         <div class="modal-body">
             <form hx-post="{% url 'ledger:transaction-create' %}">
-                {% include 'ledger/transaction/partials/form.html' %}
+                {% include 'ledger/transaction/partials/create/form.html' %}
             </form>
         </div>
     </div>

@@ -1,12 +1,12 @@
 <div class="modal-dialog">
     <div class="modal-content">
         <div class="modal-header">
-            <h5 class="modal-title">Update Transaction</h5>
+            <h5 class="modal-title">Upload Transactions</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
-            <form hx-put="{% url 'ledger:transaction-update' object.pk %}">
-                {% include 'ledger/transaction/partials/update-form.html' %}
+            <form enctype="multipart/form-data" hx-post="{% url 'ledger:transaction-upload' %}">
+                {% include 'ledger/transaction/partials/upload/form.html' %}
             </form>
         </div>
     </div>

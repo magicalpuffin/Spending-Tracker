@@ -43,7 +43,7 @@ class LoadTransactionTableView(View):
     '''
     Used to reload the table, should be triggered
     '''
-    template_name= 'ledger/transaction/partials/table.html'
+    template_name= 'ledger/transaction/partials/table/table.html'
     table_class= TransactionTable
     model_class= Transaction
 
@@ -60,7 +60,7 @@ class LoadTransactionTableView(View):
 class TransactionCreateView(View):
     '''
     '''
-    template_name= 'ledger/transaction/partials/form.html'
+    template_name= 'ledger/transaction/partials/create/form.html'
     form_class= TransactionForm
     table_class= TransactionTable
     model_class= Transaction
@@ -108,10 +108,9 @@ class TransactionDeleteView(View):
 
         return response
 
-# TODO
-# Clean up partials, document methods
 class TransactionUpdateView(View):
-    template_name= 'ledger/transaction/partials/update-modal.html'
+    template_name= 'ledger/transaction/partials/update/modal.html'
+    form_template_name= 'ledger/transaction/partials/update/form.html'
     form_class= TransactionForm
     model_class= Transaction
 
@@ -138,7 +137,7 @@ class TransactionUpdateView(View):
         context['form'] = form
 
         # Only updating the form, but modal gets dismissed anyways
-        response = render(request, 'ledger/transaction/partials/update-form.html', context)
+        response = render(request, self.form_template_name, context)
 
         if form.is_valid():
             new_model = form.save()
@@ -154,7 +153,7 @@ class TransactionUpdateView(View):
 # TODO
 # Refactor, split into smaller functions, flip if statement to remove indent
 class TransactionUploadView(View):
-    template_name= 'ledger/transaction/partials/upload-form.html'
+    template_name= 'ledger/transaction/partials/upload/form.html'
     form_class= UploadTransactionForm
     model_class= Transaction
 
@@ -166,67 +165,89 @@ class TransactionUploadView(View):
         
         response = render(request, self.template_name, context)
 
-        if form.is_valid():
-            upload_file = request.FILES["file"]
+        # If form is not valid, return the form
+        if not form.is_valid():
+            return response
+
+        upload_file = request.FILES["file"]
+        
+        # If file is not a csv, give warning
+        if not upload_file.name.endswith('.csv'):
+            self._handle_csv_error(request, response)
+            return response
+        
+        upload_df = pd.read_csv(upload_file)
+
+        # If columns does not contain key model fields, give warning
+        if not set(['ref_num', 'trans_date', 'name', 'amount']).issubset(upload_df.columns):
+            self._handle_column_error(request, response)
+            return response
+        
+        # Only sets certain columns in item creation
+        # TODO
+        # Automatic type selection by allowing type column, selecting best existing match for duplicate names
+        upload_df = upload_df[['ref_num', 'trans_date', 'name', 'amount']]
+
+        # Filter sout data if ref_num already in databasea
+        upload_df = self._remove_duplicates(request, upload_df)
+
+        # If no new transactions are created, give warning
+        if len(upload_df) < 1:
+            self._handle_no_new_transactions_error(request, response)
+            return response
+        
+        # Saves data, returns failed indexes
+        failed_indexs = self._save_transactions(request, upload_df)
+
+        form= self.form_class()
+        context['form'] = form
+        response = render(request, self.template_name, context)
+
+        self._handle_successful_upload(request, response, upload_df, failed_indexs)
             
-            # If file is not a csv, give warning
-            if not upload_file.name.endswith('.csv'):                
-                messages.add_message(request, messages.WARNING, f'File is not a csv')
-
-                trigger_client_event(response, 'loadMessages', {})
-                return response
-            
-            upload_df = pd.read_csv(upload_file)
-
-            # If columns does not contain key model fields, give warning
-            if not set(['ref_num', 'trans_date', 'name', 'amount']).issubset(upload_df.columns):
-                messages.add_message(request, messages.WARNING, f'Incorrect columns')
-
-                trigger_client_event(response, 'loadMessages', {})
-                return response
-            
-            # Prevents accidently setting using form
-            upload_df = upload_df[['ref_num', 'trans_date', 'name', 'amount']]
-
-            # Only adds if data does not conflict with existing ref_nums
-            exisitng_ref_num = self.model_class.objects.values_list('ref_num', flat= True)
-            duplicate_ref_num = upload_df['ref_num'].isin(exisitng_ref_num)
-            
-            upload_df = upload_df[~duplicate_ref_num]
-
-            if duplicate_ref_num.sum() > 0:
-                messages.add_message(request, messages.WARNING, f'Skipping {duplicate_ref_num.sum()} duplicate ref_nums')
-
-            if len(upload_df) < 1:
-                messages.add_message(request, messages.WARNING, f'No transactions with new ref_nums')
-
-                trigger_client_event(response, 'loadMessages', {})
-                return response
-            
-            failed_indexs = []
-            for index, row in upload_df.iterrows():
-                # Uses the form to validate data before submission
-                # Adds source from from form to all rows
-                data_dict = row.to_dict()
-                data_dict['source'] = request.POST.get('source')
-
-                form = TransactionForm(data_dict)
-                if form.is_valid():
-                    form.save()
-                else:
-                    failed_indexs.append(index)
-
-            # Returns the indexes which failed
-            if failed_indexs:
-                messages.add_message(request, messages.WARNING, f'Unable to add {failed_indexs}')
-            
-            messages.add_message(request, messages.SUCCESS, f'Added {len(upload_df) - len(failed_indexs)} transactions')
-            
-            form= self.form_class()
-            context['form'] = form
-            response = render(request, self.template_name, context)
-
-            trigger_client_event(response, 'loadTransactionTable', {})
-            trigger_client_event(response, 'loadMessages', {})
-
         return response
+    
+    def _handle_csv_error(self, request, response):
+        messages.add_message(request, messages.WARNING, f'File is not a csv')
+        trigger_client_event(response, 'loadMessages', {})
+
+    def _handle_column_error(self, request, response):
+        messages.add_message(request, messages.WARNING, f'Incorrect columns')
+        trigger_client_event(response, 'loadMessages', {})
+
+    def _remove_duplicates(self, request, upload_df):
+        existing_ref_num = self.model_class.objects.values_list('ref_num', flat=True)
+        duplicate_ref_num = upload_df['ref_num'].isin(existing_ref_num)
+
+        upload_df = upload_df[~duplicate_ref_num]
+
+        if duplicate_ref_num.sum() > 0:
+            messages.add_message(request, messages.WARNING, f'Skipping {duplicate_ref_num.sum()} duplicate ref_nums')
+        
+        return upload_df
+
+    def _handle_no_new_transactions_error(self, request, response):
+        messages.add_message(request, messages.WARNING, f'No transactions with new ref_nums')
+        trigger_client_event(response, 'loadMessages', {})
+
+    def _save_transactions(self, request, upload_df):
+        failed_indexs = []
+        for index, row in upload_df.iterrows():
+            data_dict = row.to_dict()
+            data_dict['source'] = request.POST.get('source')
+
+            form = TransactionForm(data_dict)
+            if form.is_valid():
+                form.save()
+            else:
+                failed_indexs.append(index)
+        
+        if failed_indexs:
+            messages.add_message(request, messages.WARNING, f'Unable to add {failed_indexs}')
+        
+        return failed_indexs
+
+    def _handle_successful_upload(self, request, response, upload_df, failed_indexs):
+        messages.add_message(request, messages.SUCCESS, f'Added {len(upload_df) - len(failed_indexs)} transactions')
+        trigger_client_event(response, 'loadTransactionTable', {})
+        trigger_client_event(response, 'loadMessages', {})
