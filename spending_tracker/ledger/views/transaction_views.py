@@ -10,12 +10,13 @@ from django_htmx.http import trigger_client_event
 from ledger.models import Transaction
 from ledger.forms import TransactionForm, UploadTransactionForm
 from ledger.tables import TransactionTable
+from ledger.views.singlepageapp_mixin import IndexTableMixin, LoadTableMixin, CreateMixin, DeleteMixin, UpdateMixin
 
 import pandas as pd
 
 # Create your views here.
-    
-class TransactionIndexView(TemplateView):
+
+class TransactionIndexView(IndexTableMixin):
     '''
     Displays entire transaction table, sets up modals
     '''
@@ -23,135 +24,50 @@ class TransactionIndexView(TemplateView):
     form_class= TransactionForm
     table_class= TransactionTable
     model_class= Transaction
+    table_pagination= {
+        'per_page': 10
+    }
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        context['table'] = self.table_class(self.model_class.objects.all())
-        RequestConfig(self.request, paginate={"per_page": 10}).configure(context['table'])
-        
-        context['form'] = self.form_class()
         context['uploadform'] = UploadTransactionForm()
-
-        # Sets the query string
-        context['page'] = self.request.GET.get("page", '')
-        context['sort'] = self.request.GET.get("sort", '')
 
         return context
 
-class LoadTransactionTableView(View):
+class LoadTransactionTableView(LoadTableMixin):
     '''
-    Used to reload the table, should be triggered
     '''
     template_name= 'ledger/transaction/partials/table/table.html'
     table_class= TransactionTable
     model_class= Transaction
+    table_pagination= {
+        'per_page': 10
+    }
 
-    def get(self, request, *args, **kwargs):
-        # Automatically uses the query string to load the correct page of table
-        context= {}
-        
-        table= self.table_class(self.model_class.objects.all())
-        RequestConfig(request, paginate={"per_page": 10}).configure(table)
-        context['table'] = table
-
-        return render(request, self.template_name, context)
-
-class TransactionCreateView(View):
+class TransactionCreateView(CreateMixin):
     '''
     '''
     template_name= 'ledger/transaction/partials/create/form.html'
     form_class= TransactionForm
     table_class= TransactionTable
     model_class= Transaction
+    load_table_trigger = 'loadTransactionTable'
+    load_messages_trigger = 'loadMessages'
 
-    def post(self, request, *args, **kwargs):
-        context= {}
-
-        form= self.form_class(request.POST)
-        context['form'] = form
-
-        # By default, return the form
-        response = render(request, self.template_name, context)
-
-        if form.is_valid():
-            new_transaction = form.save()
-
-            messages.add_message(request, messages.SUCCESS, f'Created {new_transaction.name}')
-
-            form= self.form_class()
-            context['form'] = form
-
-            response = render(request, self.template_name, context)
-            
-            # htmx triggers
-            trigger_client_event(response, 'loadTransactionTable', {})
-            trigger_client_event(response, 'loadMessages', {})
-
-        # Successful returns don't close the modal, would need to jquery or htmx hid the modal
-        return response
-
-
-class TransactionDeleteView(View):
+class TransactionDeleteView(DeleteMixin):
     model_class= Transaction
+    load_table_trigger = 'loadTransactionTable'
+    load_messages_trigger = 'loadMessages'
 
-    def delete(self, request, pk, *args, **kwargs):
-        remove_transaction = self.model_class.objects.get(pk = pk)
-        remove_transaction.delete()
-
-        messages.add_message(request, messages.SUCCESS, f'Deleted {remove_transaction.name}')
-
-        # Adds triggers to response header
-        response= HttpResponse('')
-        trigger_client_event(response, 'loadTransactionTable', {})
-        trigger_client_event(response, 'loadMessages', {})
-
-        return response
-
-class TransactionUpdateView(View):
+class TransactionUpdateView(UpdateMixin):
     template_name= 'ledger/transaction/partials/update/modal.html'
     form_template_name= 'ledger/transaction/partials/update/form.html'
     form_class= TransactionForm
     model_class= Transaction
+    load_table_trigger = 'loadTransactionTable'
+    load_messages_trigger = 'loadMessages'
 
-    def get(self, request, pk, *args, **kwargs):
-        context= {}
-
-        model = self.model_class.objects.get(pk = pk)
-        form = self.form_class(instance= model)
-        
-        context['object'] = model
-        context['form'] = form
-
-        return render(request, self.template_name, context)
-    
-    def put(self, request, pk, *args, **kwargs):
-        context= {}
-
-        model = self.model_class.objects.get(pk = pk)
-        data = QueryDict(request.body).dict()
-        form = self.form_class(data, instance= model)
-
-        # I don't think model is needed for this
-        context['object'] = model
-        context['form'] = form
-
-        # Only updating the form, but modal gets dismissed anyways
-        response = render(request, self.form_template_name, context)
-
-        if form.is_valid():
-            new_model = form.save()
-            messages.add_message(request, messages.SUCCESS, f'Updated {new_model.name}')
-            
-            # htmx triggers
-            trigger_client_event(response, 'loadTransactionTable', {})
-            trigger_client_event(response, 'loadMessages', {})
-        
-        # Issues with modal being dismissed even with errors
-        return response
-
-# TODO
-# Refactor, split into smaller functions, flip if statement to remove indent
 class TransactionUploadView(View):
     template_name= 'ledger/transaction/partials/upload/form.html'
     form_class= UploadTransactionForm

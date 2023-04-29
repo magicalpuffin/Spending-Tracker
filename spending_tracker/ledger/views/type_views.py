@@ -9,75 +9,53 @@ from django_htmx.http import trigger_client_event
 from ledger.models import Type
 from ledger.forms import TypeForm
 from ledger.tables import TypeTable
+from ledger.views.singlepageapp_mixin import IndexTableMixin, LoadTableMixin, CreateMixin, DeleteMixin, UpdateMixin
 
 # Create your views here.
 
 # TODO
-# Could refactor to use mixins with transaction view
+# Could refactor to use mixins with type view
 
-class TypeIndexView(TemplateView):
+class TypeIndexView(IndexTableMixin):
     '''
     '''
     template_name = 'ledger/type/index.html'
+    form_class= TypeForm
+    table_class= TypeTable
+    model_class= Type
+    table_pagination= {
+        'per_page': 10
+    }
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-
-        context['table'] = TypeTable(Type.objects.all())
-        RequestConfig(self.request, paginate={"per_page": 10}).configure(context['table'])
-        
-        context['form'] = TypeForm()
-
-        context['page'] = self.request.GET.get("page", '')
-        context['sort'] = self.request.GET.get("sort", '')
-
-        return context
-
-def load_type_table(request):
+class LoadTypeTableView(LoadTableMixin):
     '''
-    Used to reload the table, should be triggered
     '''
-    # Automatically uses the query string to load the correct page of table
-    table= TypeTable(Type.objects.all())
-    RequestConfig(request, paginate={"per_page": 10}).configure(table)
-    
-    return render(request, 'ledger/type/partials/table.html', {'table': table})
+    template_name= 'ledger/type/partials/table/table.html'
+    table_class= TypeTable
+    model_class= Type
+    table_pagination= {
+        'per_page': 10
+    }
 
+class TypeCreateView(CreateMixin):
+    '''
+    '''
+    template_name= 'ledger/type/partials/create/form.html'
+    form_class= TypeForm
+    table_class= TypeTable
+    model_class= Type
+    load_table_trigger = 'loadTypeTable'
+    load_messages_trigger = 'loadMessages'
 
-def type_create(request):
-    if request.method == 'POST':
-        type_form= TypeForm(request.POST)
+class TypeDeleteView(DeleteMixin):
+    model_class= Type
+    load_table_trigger = 'loadTypeTable'
+    load_messages_trigger = 'loadMessages'
 
-        if type_form.is_valid():
-            new_type = type_form.save()
-
-            table= TypeTable(Type.objects.all())
-            RequestConfig(request, paginate={"per_page": 10}).configure(table)
-
-            messages.add_message(request, messages.SUCCESS, f'Created {new_type.name}')
-
-            form= TypeForm()
-            response = render(request, 'ledger/type/partials/form.html', {'form': form})
-            
-            # htmx triggers
-            trigger_client_event(response, 'loadTypeTable', {})
-            trigger_client_event(response, 'loadMessages', {})
-        else:
-            # Returns form with errors
-            response = render(request, 'ledger/type/partials/form.html', {'form': type_form})
-
-    return response
-
-
-def type_delete(request, pk):
-    if request.method == 'DELETE':
-        remove_type = Type.objects.get(pk = pk)
-        remove_type.delete()
-
-        messages.add_message(request, messages.SUCCESS, f'Deleted {remove_type.name}')
-
-        response= HttpResponse('')
-        trigger_client_event(response, 'loadTypeTable', {})
-        trigger_client_event(response, 'loadMessages', {})
-
-    return response
+class TypeUpdateView(UpdateMixin):
+    template_name= 'ledger/type/partials/update/modal.html'
+    form_template_name= 'ledger/type/partials/update/form.html'
+    form_class= TypeForm
+    model_class= Type
+    load_table_trigger = 'loadTypeTable'
+    load_messages_trigger = 'loadMessages'

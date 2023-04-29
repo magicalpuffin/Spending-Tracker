@@ -1,0 +1,13 @@
+<div class="modal-dialog">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Update Type</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+            <form hx-put="{% url 'ledger:type-update' object.pk %}">
+                {% include 'ledger/type/partials/update/form.html' %}
+            </form>
+        </div>
+    </div>
+</div>

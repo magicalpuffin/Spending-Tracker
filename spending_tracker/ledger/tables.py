@@ -13,9 +13,10 @@ class TransactionTable(tables.Table):
         sequence = ['ref_num', 'source', 'trans_date', 'name', 'amount', 'type', 'edit', 'delete']
 
 class TypeTable(tables.Table):
-    delete = tables.TemplateColumn(template_name= 'ledger/type/partials/in-table-delete.html')
+    edit = tables.TemplateColumn(template_name= 'ledger/type/partials/table/in-table-update.html')
+    delete = tables.TemplateColumn(template_name= 'ledger/type/partials/table/in-table-delete.html')
 
     class Meta:
         model = Type
         fields = ['name']
-        sequence = ['name', 'delete']
+        sequence = ['name', 'edit', 'delete']

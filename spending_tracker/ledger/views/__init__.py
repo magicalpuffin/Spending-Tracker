@@ -13,7 +13,8 @@ from .transaction_views import (
 
 from .type_views import (
     TypeIndexView,
-    load_type_table,
-    type_create,
-    type_delete
+    LoadTypeTableView,
+    TypeCreateView,
+    TypeDeleteView,
+    TypeUpdateView
 )
