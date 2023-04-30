@@ -1,15 +1,17 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.http import HttpResponse
-from django.http import QueryDict
+from django.utils.decorators import method_decorator
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse, QueryDict
 
 from django_tables2 import RequestConfig
 from django_htmx.http import trigger_client_event
 from django.views.generic import View, TemplateView
 
+@method_decorator(login_required, name='dispatch')
 class IndexTableMixin(TemplateView):
     '''
-    Displays entire transaction table, sets up modals
+    Mixin for an index view with a table and form
     '''
     template_name = None
     form_class= None
@@ -22,10 +24,10 @@ class IndexTableMixin(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        context['table'] = self.table_class(self.model_class.objects.all())
+        context['table'] = self.table_class(self.model_class.objects.filter(creator= self.request.user))
         RequestConfig(self.request, paginate= self.table_pagination).configure(context['table'])
         
-        context['form'] = self.form_class()
+        context['form'] = self.form_class(request= self.request)
 
         # Sets the query string
         context['page'] = self.request.GET.get("page", '')
@@ -36,7 +38,7 @@ class IndexTableMixin(TemplateView):
 
 class LoadTableMixin(View):
     '''
-    Used to reload the table, should be triggered
+    Mixin to load a table when requested
     '''
     template_name= None
     table_class= None
@@ -46,10 +48,10 @@ class LoadTableMixin(View):
     }
 
     def get(self, request, *args, **kwargs):
-        # Automatically uses the query string to load the correct page of table
         context= {}
         
-        table= self.table_class(self.model_class.objects.all())
+        # Uses page and sort in query string when loading the table
+        table= self.table_class(self.model_class.objects.filter(creator= self.request.user))
         RequestConfig(request, paginate= self.table_pagination).configure(table)
         context['table'] = table
 
@@ -57,10 +59,10 @@ class LoadTableMixin(View):
 
 class CreateMixin(View):
     '''
+    Mixin for handling creation post request
     '''
     template_name= None
     form_class= None
-    table_class= None
     model_class= None
     load_table_trigger: str = None
     load_messages_trigger: str = None
@@ -68,7 +70,7 @@ class CreateMixin(View):
     def post(self, request, *args, **kwargs):
         context= {}
 
-        form= self.form_class(request.POST)
+        form= self.form_class(request.POST, request= request)
         context['form'] = form
 
         # By default, return the form
@@ -77,11 +79,14 @@ class CreateMixin(View):
         if not form.is_valid():
             return response
 
-        new_model = form.save()
+        # Adds current user before saving
+        new_model = form.save(commit= False)
+        new_model.creator= request.user
+        new_model.save()
 
         messages.add_message(request, messages.SUCCESS, f'Created {new_model.name}')
 
-        form= self.form_class()
+        form= self.form_class(request= request)
         context['form'] = form
 
         response = render(request, self.template_name, context)
@@ -92,6 +97,7 @@ class CreateMixin(View):
 
         # Successful returns don't close the modal, would need to jquery or htmx hid the modal
         return response
+
     
 class DeleteMixin(View):
     model_class= None
@@ -99,7 +105,8 @@ class DeleteMixin(View):
     load_messages_trigger: str = None
 
     def delete(self, request, pk, *args, **kwargs):
-        remove_model = self.model_class.objects.get(pk = pk)
+        # Deletes by primary key and if user is correct
+        remove_model = self.model_class.objects.get(pk = pk, creator= request.user)
         remove_model.delete()
 
         messages.add_message(request, messages.SUCCESS, f'Deleted {remove_model.name}')
@@ -112,6 +119,9 @@ class DeleteMixin(View):
         return response
 
 class UpdateMixin(View):
+    '''
+    Mixing for updating model, get to initialize form and post to edit model
+    '''
     template_name= None
     form_template_name= None
     form_class= None
@@ -120,10 +130,13 @@ class UpdateMixin(View):
     load_messages_trigger: str = None
 
     def get(self, request, pk, *args, **kwargs):
+        '''
+        Designed to return entire modal, uses object to set url in modal
+        '''
         context= {}
 
         model = self.model_class.objects.get(pk = pk)
-        form = self.form_class(instance= model)
+        form = self.form_class(instance= model, request= request)
         
         context['object'] = model
         context['form'] = form
@@ -131,11 +144,14 @@ class UpdateMixin(View):
         return render(request, self.template_name, context)
     
     def put(self, request, pk, *args, **kwargs):
+        '''
+        Designed to return just the contents within the form
+        '''
         context= {}
 
         model = self.model_class.objects.get(pk = pk)
         data = QueryDict(request.body).dict()
-        form = self.form_class(data, instance= model)
+        form = self.form_class(data, instance= model, request= request)
 
         # I don't think model is needed for this
         context['object'] = model

@@ -13,9 +13,6 @@ from ledger.views.singlepageapp_mixin import IndexTableMixin, LoadTableMixin, Cr
 
 # Create your views here.
 
-# TODO
-# Could refactor to use mixins with type view
-
 class TypeIndexView(IndexTableMixin):
     '''
     '''

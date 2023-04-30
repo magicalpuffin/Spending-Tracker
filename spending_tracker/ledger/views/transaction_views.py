@@ -7,7 +7,7 @@ from django.views.generic import View, TemplateView
 from django_tables2 import RequestConfig
 from django_htmx.http import trigger_client_event
 
-from ledger.models import Transaction
+from ledger.models import Transaction, Type
 from ledger.forms import TransactionForm, UploadTransactionForm
 from ledger.tables import TransactionTable
 from ledger.views.singlepageapp_mixin import IndexTableMixin, LoadTableMixin, CreateMixin, DeleteMixin, UpdateMixin
@@ -72,6 +72,7 @@ class TransactionUploadView(View):
     template_name= 'ledger/transaction/partials/upload/form.html'
     form_class= UploadTransactionForm
     model_class= Transaction
+    model_type_class= Type
 
     def post(self, request, *args, **kwargs):
         context= {}
@@ -100,9 +101,10 @@ class TransactionUploadView(View):
             return response
         
         # Only sets certain columns in item creation
-        # TODO
-        # Automatic type selection by allowing type column, selecting best existing match for duplicate names
-        upload_df = upload_df[['ref_num', 'trans_date', 'name', 'amount']]
+        if set(['ref_num', 'trans_date', 'name', 'amount', 'type']).issubset(upload_df.columns):
+            upload_df = upload_df[['ref_num', 'trans_date', 'name', 'amount', 'type']]
+        else:
+            upload_df = upload_df[['ref_num', 'trans_date', 'name', 'amount']]
 
         # Filter sout data if ref_num already in databasea
         upload_df = self._remove_duplicates(request, upload_df)
@@ -132,7 +134,7 @@ class TransactionUploadView(View):
         trigger_client_event(response, 'loadMessages', {})
 
     def _remove_duplicates(self, request, upload_df):
-        existing_ref_num = self.model_class.objects.values_list('ref_num', flat=True)
+        existing_ref_num = self.model_class.objects.filter(creator= request.user).values_list('ref_num', flat=True)
         duplicate_ref_num = upload_df['ref_num'].isin(existing_ref_num)
 
         upload_df = upload_df[~duplicate_ref_num]
@@ -150,11 +152,25 @@ class TransactionUploadView(View):
         failed_indexs = []
         for index, row in upload_df.iterrows():
             data_dict = row.to_dict()
+
+            data_dict['type'] = None
+            # If data has a type column, try to match it by name
+            if 'type' in row.index:
+                data_dict['type'] = self.model_type_class.objects.filter(creator= request.user, name= row['type']).first()
+            
+            # If there is no type column or match fails, try to use a similar transaction's type
+            if data_dict['type'] == None:
+                similar_transaction = self.model_class.objects.filter(creator= request.user, name= row['name']).first()
+                if similar_transaction:
+                    data_dict['type'] = similar_transaction.type
+
             data_dict['source'] = request.POST.get('source')
 
             form = TransactionForm(data_dict)
             if form.is_valid():
-                form.save()
+                new_model = form.save(commit= False)
+                new_model.creator = request.user
+                new_model.save()
             else:
                 failed_indexs.append(index)
         
