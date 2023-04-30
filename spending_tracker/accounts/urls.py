@@ -8,6 +8,8 @@ app_name = 'accounts'
 urlpatterns = [
     path('register/', views.register, name='register'),
     path('profile/', views.profile, name='profile'),
+    path('guest-login/', views.guest_login, name='guest-login'),
+    path('deactivate/', views.deactivate_account, name='deactivate'),
     path('login/', 
         auth_views.LoginView.as_view(
             template_name='accounts/login.html'), 
