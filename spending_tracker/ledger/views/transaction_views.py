@@ -1,5 +1,7 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
+from django.utils.decorators import method_decorator
+from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.http import QueryDict
 from django.views.generic import View, TemplateView
@@ -15,6 +17,9 @@ from ledger.views.singlepageapp_mixin import IndexTableMixin, LoadTableMixin, Cr
 import pandas as pd
 
 # Create your views here.
+
+# TODO
+# Have some form of bulk editing
 
 class TransactionIndexView(IndexTableMixin):
     '''
@@ -68,6 +73,7 @@ class TransactionUpdateView(UpdateMixin):
     load_table_trigger = 'loadTransactionTable'
     load_messages_trigger = 'loadMessages'
 
+@method_decorator(login_required, name='dispatch')
 class TransactionUploadView(View):
     template_name= 'ledger/transaction/partials/upload/form.html'
     form_class= UploadTransactionForm

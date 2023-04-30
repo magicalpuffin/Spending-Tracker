@@ -35,7 +35,7 @@ class IndexTableMixin(TemplateView):
 
         return context
     
-
+@method_decorator(login_required, name='dispatch')
 class LoadTableMixin(View):
     '''
     Mixin to load a table when requested
@@ -57,6 +57,7 @@ class LoadTableMixin(View):
 
         return render(request, self.template_name, context)
 
+@method_decorator(login_required, name='dispatch')
 class CreateMixin(View):
     '''
     Mixin for handling creation post request
@@ -98,7 +99,7 @@ class CreateMixin(View):
         # Successful returns don't close the modal, would need to jquery or htmx hid the modal
         return response
 
-    
+@method_decorator(login_required, name='dispatch')
 class DeleteMixin(View):
     model_class= None
     load_table_trigger: str = None
@@ -118,6 +119,7 @@ class DeleteMixin(View):
 
         return response
 
+@method_decorator(login_required, name='dispatch')
 class UpdateMixin(View):
     '''
     Mixing for updating model, get to initialize form and post to edit model
