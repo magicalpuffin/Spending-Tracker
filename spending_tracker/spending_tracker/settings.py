@@ -24,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', False)
+DEBUG = (os.environ.get('DEBUG') == 'True')
 
 ALLOWED_HOSTS = [os.environ.get('ALLOWED_HOSTS', 'localhost')]
 
@@ -60,6 +60,11 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'spending_tracker.urls'
+
+# Allows X-Forwarded-Host in cloudfront to change url, ended up being unnecessary
+# USE_X_FORWARDED_HOST = True
+# Script name seems to be on serverside, used to remove staging from generated urls
+FORCE_SCRIPT_NAME = os.environ.get("FORCE_SCRIPT_NAME", None)
 
 TEMPLATES = [
     {
