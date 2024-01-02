@@ -79,7 +79,7 @@ def total_duplicate(data: pd.DataFrame) -> pd.Series:
     return greatest_row
 
 
-def read_folder_csv(folderpath: str) -> pd.DataFrame:
+def read_folder_csv(folderpath: str, load_func: Callable) -> pd.DataFrame:
     """
     Reads all csv in folder and concats into a single dataframe.
     Assumes all csv share the same format.
@@ -89,7 +89,7 @@ def read_folder_csv(folderpath: str) -> pd.DataFrame:
     for filename in os.listdir(folderpath):
         if filename.endswith(".csv"):
             file_path = os.path.join(folderpath, filename)
-            df = pd.read_csv(file_path)
+            df = load_func(file_path)
             dataframe_list.append(df)
 
     data = pd.concat(dataframe_list)
