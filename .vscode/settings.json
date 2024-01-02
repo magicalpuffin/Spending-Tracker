@@ -1,0 +1,7 @@
+{
+    "python.testing.pytestArgs": [
+        "process_spending"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
+}
