@@ -1,59 +1,74 @@
 import calendar
 import os
 import re
+from typing import Callable
 
 import pandas as pd
 
+COL_NAMES = ["Id", "Date", "Name", "Amount"]
 
-def clean_fidelity_data(data: pd.DataFrame) -> pd.DataFrame:
-    """
-    Converts raw Fidelity data export the standard spending data structure
-    """
-    # Remove credit card repayments
-    data = data[data["Transaction"] == "DEBIT"]
-    data = data.drop(columns="Transaction")
+FIDELITY_COLUMN_MAP = {"Memo": "Id"}
+FIDELITY_COL_FUNC = {
+    "Id": lambda x: re.findall(r"\d{23}", x)[0],
+    "Name": lambda x: re.sub(r"\s+", " ", x),
+}
 
-    # Uses the 23 digit reference number as Id
-    data["Memo"] = data["Memo"].apply(lambda x: re.findall(r"\d{23}", x)[0])
-    data = data.rename(columns={"Memo": "Id"})
+BA_COLUMN_MAP = {"Posted Date": "Date", "Reference Number": "Id", "Payee": "Name"}
+BA_COL_FUNC = {
+    "Name": lambda x: re.sub(r"\s+", " ", x),
+    "Date": lambda x: pd.to_datetime(x).strftime("%Y-%m-%d"),
+}
 
-    # Rename columns
-    data = data[["Id", "Date", "Name", "Amount"]]
 
-    # Removes extra spaces in name
-    data["Name"] = data["Name"].apply(lambda x: re.sub(r"\s+", " ", x))
+def set_col_names(
+    data: pd.DataFrame, col_map: dict[str, str], col_names: list[str]
+) -> pd.DataFrame:
+    return data.rename(columns=col_map)[col_names]
+
+
+def filter_debit(data: pd.DataFrame) -> pd.DataFrame:
+    return data[data["Amount"] < 0]
+
+
+def map_cols(data: pd.DataFrame, col_func: dict[str, Callable]) -> pd.DataFrame:
+    for col, func in col_func.items():
+        data[col] = data[col].map(func)
+    return data
+
+
+def clean_spending_data(
+    filepath: str,
+    col_map: dict[str, str],
+    col_names: list[str],
+    col_func: dict[str, Callable],
+) -> pd.DataFrame:
+    data = pd.read_csv(filepath)
+
+    data = set_col_names(data, col_map, col_names)
+    data = filter_debit(data)
+    data = map_cols(data, col_func)
 
     data = data.set_index("Id")
-    data = data.groupby("Id").apply(lambda x: combine_id(x))
+    data = data.groupby("Id").apply(lambda x: total_duplicate(x))
 
     return data
 
 
-def clean_bank_of_america_data(data: pd.DataFrame) -> pd.DataFrame:
-    """
-    Converts raw Bank of America data export to the standard spending data structure
-    """
-    # Removes credit card repayments and ussage of rewards
-    data = data[data["Amount"] < 0]
-    data.drop(columns="Address")
-
-    data = data.rename(
-        columns={"Posted Date": "Date", "Reference Number": "Id", "Payee": "Name"}
+def clean_fidelity(filepath: str) -> pd.DataFrame:
+    data = clean_spending_data(
+        filepath, FIDELITY_COLUMN_MAP, COL_NAMES, FIDELITY_COL_FUNC
     )
-    data = data[["Id", "Date", "Name", "Amount"]]
-
-    data["Date"] = pd.to_datetime(data["Date"])
-
-    # Removes extra spaces in name
-    data["Name"] = data["Name"].apply(lambda x: re.sub(r"\s+", " ", x))
-
-    data = data.set_index("Id")
-    data = data.groupby("Id").apply(lambda x: combine_id(x))
 
     return data
 
 
-def combine_id(data: pd.DataFrame) -> pd.Series:
+def clean_ba(filepath: str) -> pd.DataFrame:
+    data = clean_spending_data(filepath, BA_COLUMN_MAP, COL_NAMES, BA_COL_FUNC)
+
+    return data
+
+
+def total_duplicate(data: pd.DataFrame) -> pd.Series:
     """
     Combines transactions with the same Id.
     Uses the Date and Name of the orginally highest amount.
